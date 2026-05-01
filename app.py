@@ -7,6 +7,7 @@ import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 from simulation import run_fair_simulation
+from presets import PRESETS
 
 
 # --- Page config ---
@@ -15,39 +16,104 @@ st.title("Cyber Risk Quantifier (FAIR)")
 st.caption("Quantify annual cyber loss exposure using Monte Carlo simulation")
 
 
-# --- Sidebar inputs ---
+# --- Preset selector ---
+st.sidebar.header("Industry Preset")
+preset_name = st.sidebar.selectbox("Choose an industry:", list(PRESETS.keys()))
+
+# Load preset values or use defaults
+if PRESETS[preset_name] is not None:
+    p = PRESETS[preset_name]
+    st.sidebar.info(p["source"])
+    d_tef = p["tef"]
+    d_vuln = p["vuln"]
+    d_pl = p["pl"]
+    d_slef = p["slef"]
+    d_sl = p["sl"]
+else:
+    d_tef = (500, 2000, 10000)
+    d_vuln = (0.001, 0.010, 0.050)
+    d_pl = (50000, 250000, 2000000)
+    d_slef = (0.05, 0.20, 0.50)
+    d_sl = (100000, 1500000, 20000000)
+
+
+# --- AI Advisor ---
+st.sidebar.markdown("---")
+st.sidebar.header("AI Risk Advisor")
+st.sidebar.caption("Describe your organization and let AI estimate your risk inputs.")
+
+api_key = st.sidebar.text_input("Anthropic API Key", type="password",
+    help="Get one free at console.anthropic.com")
+
+org_description = st.sidebar.text_area(
+    "Describe your organization:",
+    placeholder="Example: We are a 200-person hospital in Ohio. We use Microsoft 365, "
+    "basic antivirus, no MFA. We store patient records electronically. "
+    "We had one phishing incident last year.",
+    height=120,
+)
+
+if st.sidebar.button("Generate FAIR Estimates"):
+    if not api_key:
+        st.sidebar.error("Please enter your Anthropic API key.")
+    elif not org_description:
+        st.sidebar.error("Please describe your organization.")
+    else:
+        with st.sidebar:
+            with st.spinner("AI is analyzing your organization..."):
+                try:
+                    from ai_advisor import estimate_fair_inputs
+                    ai_result = estimate_fair_inputs(org_description, api_key)
+
+                    # Store in session state so inputs update
+                    st.session_state["ai_inputs"] = ai_result
+                    st.success("Estimates generated! Scroll down to see updated inputs.")
+                    st.info(ai_result.get("reasoning", ""))
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+
+# Override defaults if AI generated inputs exist
+if "ai_inputs" in st.session_state:
+    ai = st.session_state["ai_inputs"]
+    d_tef = (ai["tef_low"], ai["tef_mode"], ai["tef_high"])
+    d_vuln = (ai["vuln_low"], ai["vuln_mode"], ai["vuln_high"])
+    d_pl = (ai["pl_low"], ai["pl_mode"], ai["pl_high"])
+    d_slef = (ai["slef_low"], ai["slef_mode"], ai["slef_high"])
+    d_sl = (ai["sl_low"], ai["sl_mode"], ai["sl_high"])
+
+# --- Sidebar inputs (pre-filled from preset) ---
 st.sidebar.header("FAIR Inputs")
-st.sidebar.markdown("Enter min, most likely, and max for each variable.")
+st.sidebar.markdown("Adjust these to match your environment.")
 
 st.sidebar.subheader("Threat Event Frequency")
-st.sidebar.caption("How many threat attempts per year?")
-tef_low = st.sidebar.number_input("TEF Min", value=500)
-tef_mode = st.sidebar.number_input("TEF Most Likely", value=2000)
-tef_high = st.sidebar.number_input("TEF Max", value=10000)
+st.sidebar.caption("How many attack attempts per year?")
+tef_low = st.sidebar.number_input("TEF Min", value=d_tef[0])
+tef_mode = st.sidebar.number_input("TEF Most Likely", value=d_tef[1])
+tef_high = st.sidebar.number_input("TEF Max", value=d_tef[2])
 
 st.sidebar.subheader("Vulnerability")
 st.sidebar.caption("Probability each attempt succeeds (0 to 1)")
-vuln_low = st.sidebar.number_input("Vuln Min", value=0.001, format="%.4f")
-vuln_mode = st.sidebar.number_input("Vuln Most Likely", value=0.010, format="%.4f")
-vuln_high = st.sidebar.number_input("Vuln Max", value=0.050, format="%.4f")
+vuln_low = st.sidebar.number_input("Vuln Min", value=d_vuln[0], format="%.4f")
+vuln_mode = st.sidebar.number_input("Vuln Most Likely", value=d_vuln[1], format="%.4f")
+vuln_high = st.sidebar.number_input("Vuln Max", value=d_vuln[2], format="%.4f")
 
 st.sidebar.subheader("Primary Loss (USD)")
 st.sidebar.caption("Direct cost per breach: IR, downtime, forensics")
-pl_low = st.sidebar.number_input("PL Min", value=50000)
-pl_mode = st.sidebar.number_input("PL Most Likely", value=250000)
-pl_high = st.sidebar.number_input("PL Max", value=2000000)
+pl_low = st.sidebar.number_input("PL Min", value=d_pl[0])
+pl_mode = st.sidebar.number_input("PL Most Likely", value=d_pl[1])
+pl_high = st.sidebar.number_input("PL Max", value=d_pl[2])
 
 st.sidebar.subheader("Secondary Loss Event Frequency")
 st.sidebar.caption("Probability a breach triggers fines/lawsuits (0 to 1)")
-slef_low = st.sidebar.number_input("SLEF Min", value=0.05, format="%.2f")
-slef_mode = st.sidebar.number_input("SLEF Most Likely", value=0.20, format="%.2f")
-slef_high = st.sidebar.number_input("SLEF Max", value=0.50, format="%.2f")
+slef_low = st.sidebar.number_input("SLEF Min", value=d_slef[0], format="%.2f")
+slef_mode = st.sidebar.number_input("SLEF Most Likely", value=d_slef[1], format="%.2f")
+slef_high = st.sidebar.number_input("SLEF Max", value=d_slef[2], format="%.2f")
 
 st.sidebar.subheader("Secondary Loss Magnitude (USD)")
 st.sidebar.caption("Cost of fines, settlements, customer churn")
-sl_low = st.sidebar.number_input("SL Min", value=100000)
-sl_mode = st.sidebar.number_input("SL Most Likely", value=1500000)
-sl_high = st.sidebar.number_input("SL Max", value=20000000)
+sl_low = st.sidebar.number_input("SL Min", value=d_sl[0])
+sl_mode = st.sidebar.number_input("SL Most Likely", value=d_sl[1])
+sl_high = st.sidebar.number_input("SL Max", value=d_sl[2])
 
 
 # --- Run simulation ---
