@@ -1,0 +1,19 @@
+cat > sample_incidents.csv << 'EOF'
+date,type,severity,status,cost
+2025-01-15,phishing,high,confirmed,180000
+2025-02-03,malware,critical,confirmed,450000
+2025-02-20,phishing,medium,blocked,0
+2025-03-11,brute_force,low,blocked,0
+2025-04-05,phishing,high,confirmed,220000
+2025-04-18,ransomware,critical,confirmed,1200000
+2025-05-02,phishing,medium,blocked,0
+2025-06-14,insider,high,confirmed,350000
+2025-07-01,phishing,low,blocked,0
+2025-07-22,malware,medium,blocked,0
+2025-08-09,phishing,high,confirmed,95000
+2025-09-15,brute_force,low,blocked,0
+2025-10-03,phishing,medium,blocked,0
+2025-10-28,phishing,high,confirmed,175000
+2025-11-12,malware,critical,confirmed,800000
+2025-12-01,phishing,low,blocked,0
+EOF
